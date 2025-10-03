@@ -8,3 +8,9 @@ Tutorial (its fucking easy...)
 
 
 THIS TOOL IS COPYRIGHTED, IF YOU STEAL THE SCRIPT OR DO ANYTHING WITH IT, YOU WILL INDEED BE SUED.
+
+You must have Chrome as your Standard Browser
+You must press CTRL+Shift+B once, when your in chrome, so the notebook screen gets enlarged.
+You must have 1 Tap open.
+You must pin the script window via Deskpins or Always on Top
+dont interact, when its working ;D
