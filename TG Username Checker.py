@@ -3,17 +3,21 @@ import time
 import os
 import threading
 import random
-import subprocess
+import pyautogui  # type: ignore
+import webbrowser
+import pyperclip  # type: ignore
+import pytesseract
+from PIL import Image, ImageFilter, ImageOps, ImageEnhance
 
-from kivy.clock import Clock # type: ignore
-from kivy.lang import Builder # type: ignore
-from kivy.metrics import dp # type: ignore
-from kivy.core.window import Window # type: ignore
-from kivy.config import Config # type: ignore
-from kivy.animation import Animation # type: ignore
-from kivy.uix.label import Label # type: ignore
-from kivy.uix.screenmanager import Screen, ScreenManager # type: ignore
-from kivy.app import App # type: ignore
+from kivy.clock import Clock  # type: ignore
+from kivy.lang import Builder  # type: ignore
+from kivy.metrics import dp  # type: ignore
+from kivy.core.window import Window  # type: ignore
+from kivy.config import Config  # type: ignore
+from kivy.animation import Animation  # type: ignore
+from kivy.uix.label import Label  # type: ignore
+from kivy.uix.screenmanager import Screen, ScreenManager  # type: ignore
+from kivy.app import App  # type: ignore
 
 Config.set("input", "mouse", "mouse,multitouch_on_demand")
 
@@ -29,6 +33,173 @@ if not os.path.isfile(INPUT_FILE):
         f.write("")
 
 
+def is_color_close(r, g, b, target, tol=10):
+    """Check if (r,g,b) is close to target within tolerance tol."""
+    return all(abs(c - t) <= tol for c, t in zip((r, g, b), target))
+
+
+def check_username_result() -> bool:
+    time.sleep(3)
+    screenshot = pyautogui.screenshot(region=(300, 650, 600, 100))
+    text = pytesseract.image_to_string(screenshot).lower()
+    if "taken" in text or "invalid" in text or "used" in text:
+        return False
+    return True
+
+
+def detect_claim_success(uname: str, log_callback=None, pixel_x=49, pixel_y=661) -> bool:
+    try:
+        time.sleep(2)
+        region = (300, 650, 800, 150)
+        img = pyautogui.screenshot(region=region)
+        gray = img.convert("L")
+        gray = ImageOps.autocontrast(gray, cutoff=2)
+        gray = ImageEnhance.Contrast(gray).enhance(1.8)
+        gray = gray.filter(ImageFilter.MedianFilter(size=3))
+        bw = gray.point(lambda x: 0 if x < 150 else 255, "1")
+        text = pytesseract.image_to_string(bw, config="--psm 6").lower().strip()
+
+        if log_callback:
+            log_callback(f"OCR-Result: '{text[:200]}'", (0.6, 0.6, 1, 1))
+
+        success_keywords = [
+            "saved", "success", "username set", "username updated", "erfolgreich",
+            "gespeichert", "successfully", "updated", "done", "✓", "ist jetzt"
+        ]
+        failure_keywords = [
+            "taken", "invalid", "used", "not available", "already taken", "could not",
+            "can't", "couldn't", "error", "nicht", "fehler", "bereits verwendet", "unavailable"
+        ]
+
+        for k in success_keywords:
+            if k in text:
+                if log_callback:
+                    log_callback(f"Erfolg-Keyword gefunden: '{k}'", (0, 1, 0, 1))
+                return True
+        for k in failure_keywords:
+            if k in text:
+                if log_callback:
+                    log_callback(f"Fehler-Keyword gefunden: '{k}'", (1, 0, 0, 1))
+                return False
+
+        def sample_avg(px, py, size=2):
+            tot_r = tot_g = tot_b = count = 0
+            for dx in range(-size, size + 1):
+                for dy in range(-size, size + 1):
+                    try:
+                        r, g, b = pyautogui.pixel(px + dx, py + dy)
+                        tot_r += r
+                        tot_g += g
+                        tot_b += b
+                        count += 1
+                    except Exception:
+                        continue
+            return (tot_r // count, tot_g // count, tot_b // count) if count else (0, 0, 0)
+
+        try:
+            r, g, b = sample_avg(pixel_x, pixel_y, size=2)
+            if log_callback:
+                log_callback(f"Pixel-Mittelwert @({pixel_x},{pixel_y}) -> R:{r} G:{g} B:{b}", (0.5, 0.5, 1, 1))
+            if is_color_close(r, g, b, (255, 211, 225), tol=10):
+                if log_callback:
+                    log_callback("Pixel-Fallback: Pastellrosa erkannt -> Erfolg", (0, 1, 0, 1))
+                return True
+            if (r, g, b) == (255, 255, 255):
+                if log_callback:
+                    log_callback("Pixel-Fallback: Weiß erkannt -> Fehler", (1, 0, 0, 1))
+                return False
+        except Exception as e:
+            if log_callback:
+                log_callback(f"Pixel-Lesen fehlgeschlagen: {e}", (1, 0.6, 0.2, 1))
+
+        if log_callback:
+            log_callback("Fallback: Prüfe per HTTP...", (1, 1, 0.4, 1))
+        try:
+            time.sleep(1)
+            available = check_username(uname)
+            if not available:
+                if log_callback:
+                    log_callback("HTTP-Check: jetzt UNAVAILABLE -> Claim war erfolgreich.", (0, 1, 0, 1))
+                return True
+            else:
+                if log_callback:
+                    log_callback("HTTP-Check: noch verfügbar -> Claim fehlgeschlagen.", (1, 0, 0, 1))
+                return False
+        except Exception as e:
+            if log_callback:
+                log_callback(f"HTTP-Check failed: {e}", (1, 0.4, 0.2, 1))
+            return False
+
+    except Exception as ex:
+        if log_callback:
+            log_callback(f"detect_claim_success Fehler: {ex}", (1, 0.2, 0.2, 1))
+        return False
+
+
+def auto_claim_in_web(uname: str, log_callback=None) -> bool:
+    try:
+        webbrowser.open("https://web.telegram.org/")
+        time.sleep(3)
+
+        positions = [(31, 146), (83, 196), (400, 151), (136, 688)]
+        for x, y in positions:
+            pyautogui.moveTo(x, y, duration=0.2)
+            pyautogui.click()
+            time.sleep(1)
+
+        pyperclip.copy(uname)
+        pyautogui.hotkey("ctrl", "a")
+        time.sleep(0.2)
+        pyautogui.press("delete")
+        time.sleep(0.2)
+        pyautogui.hotkey("ctrl", "v")
+        time.sleep(0.2)
+
+        pixel_x, pixel_y = 49, 661
+        try:
+            r, g, b = pyautogui.pixel(pixel_x, pixel_y)
+        except Exception:
+            r = g = b = 0
+        if log_callback:
+            log_callback(f"Pixel @({pixel_x},{pixel_y}) -> R:{r} G:{g} B:{b}", (0.5, 0.5, 1, 1))
+
+        # Grün
+        if is_color_close(r, g, b, (255, 211, 225), tol=10):
+            if log_callback:
+                log_callback(f"🌸 Grün erkannt bei {uname}, drücke Enter...", (0, 1, 0, 1))
+            pyautogui.moveTo(435, 1000, duration=0.2)
+            pyautogui.click()
+            os._exit(0)
+
+        # Rot
+        elif (r, g, b) == (255, 255, 255):
+            if log_callback:
+                log_callback(f"❌ Weiß erkannt bei {uname}, Tab schließen + (1080,800)...", (1, 0, 0, 1))
+            pyautogui.hotkey("ctrl", "w")
+            time.sleep(0.5)
+            pyautogui.moveTo(1080, 800, duration=0.2)
+            pyautogui.click()
+            time.sleep(1)
+            return False
+
+        # Unklare Farbe
+        else:
+            if log_callback:
+                log_callback(f"⚪️ Unklare Farbe ({r},{g},{b}) – Tab schließen & prüfen...", (1, 1, 0, 1))
+            pyautogui.hotkey("ctrl", "w")
+            time.sleep(0.2)
+            pyautogui.moveTo(1080, 800, duration=0.2)
+            pyautogui.click()
+            time.sleep(1)
+            success = detect_claim_success(uname, log_callback, pixel_x, pixel_y)
+            return success
+
+    except Exception as e:
+        if log_callback:
+            log_callback(f"Fehler in auto_claim_in_web: {e}", (1, 0, 0, 1))
+        return False
+
+
 def check_username(username: str) -> bool:
     url = f"https://fragment.com/username/{username}"
     try:
@@ -41,6 +212,10 @@ def check_username(username: str) -> bool:
     except Exception as e:
         raise Exception(f"Mistake while asking for {username}: {e}")
     return "unavailable" in body
+
+
+# ... dein KV-Code, SplashScreen, MainScreen, MainApp bleiben unverändert ...
+
 
 
 KV = r"""
@@ -209,6 +384,23 @@ ScreenManager:
                                 rectangle: (self.x+2, self.y+2, self.width-4, self.height-4)
                         on_release: root.start_checking()
                     Widget:
+
+                BoxLayout:
+                    size_hint_y: None
+                    height: dp(64)
+                    padding: 0
+                    Widget:
+                    Button:
+                        id: continue_btn
+                        text: "Continue"
+                        size_hint: None, None
+                        width: dp(220)
+                        height: dp(42)
+                        background_normal: ""
+                        background_color: 0,0.5,0,1
+                        color: 1,1,1,1
+                        on_release: root.continue_checking()
+                    Widget:
 """
 
 
@@ -297,33 +489,52 @@ class SplashScreen(Screen):
         Clock.schedule_once(lambda dt: os.startfile(INPUT_FILE), 1.0)
 
 
-
 class MainScreen(Screen):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.usernames = []
         self.open_usernames = []
+        self.current_index = 0  # Fortschritt merken
+        self._running_thread = None
+
+    def continue_checking(self):
+        self.log("➡️ Continue gedrückt, mache mit nächstem Username weiter...", (0, 1, 1, 1))
+        # Button-Status setzen
+        Clock.schedule_once(lambda dt: self._set_start_btn_running(), 0)
+        threading.Thread(target=self.run_checking, args=(self.current_index + 1,), daemon=True).start()
+
+    def _set_start_btn_running(self):
+        try:
+            self.ids.start_btn.disabled = True
+            self.ids.start_btn.text = "Checking..."
+        except Exception:
+            pass
 
     def _add_row_to_container(self, container_id, text, color=(1, 1, 1, 1)):
-        container = self.ids.get(container_id)
-        if container is None:
-            return
-        lbl = Label(text=text, color=color, size_hint_y=None, height=dp(28), halign="left", valign="middle")
-        lbl.text_size = (container.width - dp(8) if container.width else Window.width - 200, None)
-        container.add_widget(lbl)
-        container.height = container.minimum_height
+        def _do_add(dt):
+            container = self.ids.get(container_id)
+            if container is None:
+                return
+            lbl = Label(text=text, color=color, size_hint_y=None, height=dp(28),
+                        halign="left", valign="middle")
+            lbl.text_size = (container.width - dp(8) if container.width else Window.width - 200, None)
+            container.add_widget(lbl)
+            container.height = container.minimum_height
+        Clock.schedule_once(_do_add)
 
     def log(self, msg, color=(1, 1, 1, 1)):
-        self._add_row_to_container("log_container", msg, color)
+        Clock.schedule_once(lambda dt: self._add_row_to_container("log_container", msg, color))
 
     def add_available(self, uname):
-        self._add_row_to_container("available_container", uname, (0, 1, 0, 1))
+        Clock.schedule_once(lambda dt: self._add_row_to_container("available_container", uname, (0, 1, 0, 1)))
 
     def start_checking(self):
         self.ids.start_btn.disabled = True
+        self.ids.start_btn.text = "Checking..."
         if not os.path.isfile(INPUT_FILE):
             self.log(f"File not found: {INPUT_FILE}", (1, 0.3, 0.3, 1))
             self.ids.start_btn.disabled = False
+            self.ids.start_btn.text = "Start Checking"
             return
         with open(INPUT_FILE, "r", encoding="utf-8") as f:
             self.usernames = [line.strip() for line in f if line.strip()]
@@ -332,11 +543,14 @@ class MainScreen(Screen):
         self.ids.log_container.clear_widgets()
         self.ids.available_container.clear_widgets()
         self.log("Starting Check...", (1, 1, 1, 1))
-        threading.Thread(target=self.run_checking, daemon=True).start()
 
-    def run_checking(self):
+        threading.Thread(target=self.run_checking, args=(0,), daemon=True).start()
+
+    def run_checking(self, start_index=0):
         total = len(self.usernames)
-        for idx, uname in enumerate(self.usernames, start=1):
+        for idx in range(start_index, total):
+            uname = self.usernames[idx]
+            self.current_index = idx  # Fortschritt merken
             retries = 0
             is_open = False
             while retries < MAX_RETRIES:
@@ -345,42 +559,57 @@ class MainScreen(Screen):
                     break
                 except Exception as e:
                     retries += 1
-                    Clock.schedule_once(lambda dt, m=f"Mistake while asking for {uname}: {e}": self.log(m, (0.8, 0.8, 0.8, 1)))
-                    time.sleep(2)
+                    self.log(f"Mistake while asking for {uname}: {e}", (0.8, 0.8, 0.8, 1))
+                    time.sleep(1)
+
             if is_open:
                 self.open_usernames.append(uname)
-                Clock.schedule_once(lambda dt, u=uname: self.add_available(u))
-                Clock.schedule_once(lambda dt, m=f"{uname} ist not used ": self.log(m, (0, 1, 0, 1)))
+                self.add_available(uname)
+                self.log(f"{uname} ist not used", (0, 1, 0, 1))
+
+                try:
+                    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+                        for un in self.open_usernames:
+                            f.write(un + "\n")
+                    try:
+                        os.startfile(OUTPUT_FILE)
+                    except Exception:
+                        pass
+                except Exception as e:
+                    self.log(f"Mistake while saving {e}", (1, 0.5, 0.2, 1))
+
+                self.log(f"Starte automatisches Claiming für {uname}...", (1, 1, 0.6, 1))
+                # Auto-claim in separatem Thread; er loggt selbst Erfolg/Misserfolg
+                threading.Thread(target=auto_claim_in_web, args=(uname, self.log), daemon=True).start()
+                return  # Abbruch nach erstem offenen Namen (warte auf manuellen Continue falls nötig)
             else:
-                Clock.schedule_once(lambda dt, m=f"{uname} ist used ": self.log(m, (1, 0, 0, 1)))
+                self.log(f"{uname} ist used", (1, 0, 0, 1))
+
             progress_val = (idx / total) * 100 if total > 0 else 100
             Clock.schedule_once(lambda dt, v=progress_val: self._set_progress(v))
             time.sleep(SLEEP_BETWEEN)
+
         try:
             with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
                 for uname in self.open_usernames:
                     f.write(uname + "\n")
-            os.startfile(OUTPUT_FILE)
         except Exception as e:
-            Clock.schedule_once(lambda dt, m=f"Mistake while saving {e}": self.log(m, (1, 0.5, 0.2, 1)))
-        Clock.schedule_once(lambda dt: self.log(f"Done, available: {len(self.open_usernames)} from {total} (saved in: {OUTPUT_FILE})", (1, 1, 1, 1)))
-        Clock.schedule_once(lambda dt: self._enable_button())
+            self.log(f"Mistake while saving final {e}", (1, 0.5, 0.2, 1))
+
+        Clock.schedule_once(lambda dt: self._enable_start_btn())
 
     def _set_progress(self, val):
-        try:
-            self.ids.progress.value = float(val)
-        except Exception:
-            self.ids.progress.value = 0
+        self.ids.progress.value = val
 
-    def _enable_button(self):
+    def _enable_start_btn(self):
         self.ids.start_btn.disabled = False
-        self.ids.start_btn.text = "Check again"
+        self.ids.start_btn.text = "Start Checking"
 
 
-class TGUserNameChecker(App):
+class MainApp(App):
     def build(self):
         return Builder.load_string(KV)
 
 
 if __name__ == "__main__":
-    TGUserNameChecker().run()
+    MainApp().run()
