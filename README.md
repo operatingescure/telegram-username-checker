@@ -1,4 +1,4 @@
-REMEMBER: This Tool is not PERFECT. It is practically impossible, to make a fully functional, without breaking the TOS.
+REMEMBER: This Tool is not PERFECT. It is practically impossible, to make a fully functional Tool, without breaking the TOS.
 
 Tutorial (its fucking easy...)
 1. start the modules.bat
