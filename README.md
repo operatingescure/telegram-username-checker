@@ -18,3 +18,9 @@ dont interact, when its working ;D
 =======
 dont interact, when its working ;D
 >>>>>>> 8133316 (New Changes to the Python File)
+
+
+
+
+
+# TUTORIAL https://www.youtube.com/watch?v=uAvpmH1vH_o

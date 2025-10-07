@@ -1,3 +1,9 @@
+# This Tool is copy right claimed, via License. Any Stealing or Reselling, will have Law Consequences.
+
+# Buy my OSINT Tool under https://2sint.shop btw :)
+
+# Much Fun.
+
 import requests
 import time
 import os
@@ -15,14 +21,13 @@ from kivy.metrics import dp  # type: ignore
 from kivy.core.window import Window  # type: ignore
 from kivy.config import Config  # type: ignore
 from kivy.animation import Animation  # type: ignore
-from kivy.uix.label import Label  # type: ignore
+from kivy.uix.label import Label  # type: ignorea
 from kivy.uix.screenmanager import Screen, ScreenManager  # type: ignore
 from kivy.app import App  # type: ignore
 
 Config.set("input", "mouse", "mouse,multitouch_on_demand")
 
 INPUT_FILE = r"usernames.txt"
-OUTPUT_FILE = "available.txt"
 SLEEP_BETWEEN = 1.0
 MAX_RETRIES = 3
 
@@ -34,7 +39,6 @@ if not os.path.isfile(INPUT_FILE):
 
 
 def is_color_close(r, g, b, target, tol=10):
-    """Check if (r,g,b) is close to target within tolerance tol."""
     return all(abs(c - t) <= tol for c, t in zip((r, g, b), target))
 
 
@@ -47,7 +51,7 @@ def check_username_result() -> bool:
     return True
 
 
-def detect_claim_success(uname: str, log_callback=None, pixel_x=49, pixel_y=661) -> bool:
+def detect_claim_success(uname: str, log_callback=None, pixel_x=118, pixel_y=709) -> bool:
     try:
         time.sleep(2)
         region = (300, 650, 800, 150)
@@ -74,12 +78,12 @@ def detect_claim_success(uname: str, log_callback=None, pixel_x=49, pixel_y=661)
         for k in success_keywords:
             if k in text:
                 if log_callback:
-                    log_callback(f"Erfolg-Keyword gefunden: '{k}'", (0, 1, 0, 1))
+                    log_callback(f"keyword found: '{k}'", (0, 1, 0, 1))
                 return True
         for k in failure_keywords:
             if k in text:
                 if log_callback:
-                    log_callback(f"Fehler-Keyword gefunden: '{k}'", (1, 0, 0, 1))
+                    log_callback(f"keyword not found '{k}'", (1, 0, 0, 1))
                 return False
 
         def sample_avg(px, py, size=2):
@@ -99,31 +103,31 @@ def detect_claim_success(uname: str, log_callback=None, pixel_x=49, pixel_y=661)
         try:
             r, g, b = sample_avg(pixel_x, pixel_y, size=2)
             if log_callback:
-                log_callback(f"Pixel-Mittelwert @({pixel_x},{pixel_y}) -> R:{r} G:{g} B:{b}", (0.5, 0.5, 1, 1))
+                log_callback(f"pixel @({pixel_x},{pixel_y}) -> R:{r} G:{g} B:{b}", (0.5, 0.5, 1, 1))
             if is_color_close(r, g, b, (255, 211, 225), tol=10):
                 if log_callback:
-                    log_callback("Pixel-Fallback: Pastellrosa erkannt -> Erfolg", (0, 1, 0, 1))
+                    log_callback("rosa recognized", (0, 1, 0, 1))
                 return True
             if (r, g, b) == (255, 255, 255):
                 if log_callback:
-                    log_callback("Pixel-Fallback: Weiß erkannt -> Fehler", (1, 0, 0, 1))
+                    log_callback("white recognized", (1, 0, 0, 1))
                 return False
         except Exception as e:
             if log_callback:
-                log_callback(f"Pixel-Lesen fehlgeschlagen: {e}", (1, 0.6, 0.2, 1))
+                log_callback(f"reading the pixel failed: {e}", (1, 0.6, 0.2, 1))
 
         if log_callback:
-            log_callback("Fallback: Prüfe per HTTP...", (1, 1, 0.4, 1))
+            log_callback("fallback, checking via http.", (1, 1, 0.4, 1))
         try:
             time.sleep(1)
             available = check_username(uname)
             if not available:
                 if log_callback:
-                    log_callback("HTTP-Check: jetzt UNAVAILABLE -> Claim war erfolgreich.", (0, 1, 0, 1))
+                    log_callback("http check unavailable now, claiming was a success.", (0, 1, 0, 1))
                 return True
             else:
                 if log_callback:
-                    log_callback("HTTP-Check: noch verfügbar -> Claim fehlgeschlagen.", (1, 0, 0, 1))
+                    log_callback("http check available, claiming was a fail.", (1, 0, 0, 1))
                 return False
         except Exception as e:
             if log_callback:
@@ -132,7 +136,7 @@ def detect_claim_success(uname: str, log_callback=None, pixel_x=49, pixel_y=661)
 
     except Exception as ex:
         if log_callback:
-            log_callback(f"detect_claim_success Fehler: {ex}", (1, 0.2, 0.2, 1))
+            log_callback(f"detect_claim_success erorr: {ex}", (1, 0.2, 0.2, 1))
         return False
 
 
@@ -141,7 +145,7 @@ def auto_claim_in_web(uname: str, log_callback=None) -> bool:
         webbrowser.open("https://web.telegram.org/")
         time.sleep(3)
 
-        positions = [(31, 146), (83, 196), (400, 151), (136, 688)]
+        positions = [(30, 147), (88, 205), (404, 148), (200, 682)]
         for x, y in positions:
             pyautogui.moveTo(x, y, duration=0.2)
             pyautogui.click()
@@ -155,26 +159,39 @@ def auto_claim_in_web(uname: str, log_callback=None) -> bool:
         pyautogui.hotkey("ctrl", "v")
         time.sleep(0.2)
 
-        pixel_x, pixel_y = 49, 661
+        
+        pixel_x, pixel_y = 118, 709
+
+        
+        pyautogui.moveTo(pixel_x, pixel_y, duration=0.2)
+
         try:
             r, g, b = pyautogui.pixel(pixel_x, pixel_y)
         except Exception:
             r = g = b = 0
-        if log_callback:
-            log_callback(f"Pixel @({pixel_x},{pixel_y}) -> R:{r} G:{g} B:{b}", (0.5, 0.5, 1, 1))
 
-        # Grün
-        if is_color_close(r, g, b, (255, 211, 225), tol=10):
+        if log_callback:
+            log_callback(
+                f"Pixel @({pixel_x},{pixel_y}) -> R:{r} G:{g} B:{b}", 
+                (0.5, 0.5, 1, 1)
+            )
+
+                
+        if abs(r - 79) <= 5 and abs(g - 174) <= 5 and abs(b - 78) <= 5:
             if log_callback:
-                log_callback(f"🌸 Grün erkannt bei {uname}, drücke Enter...", (0, 1, 0, 1))
+                log_callback(
+                    f"green recognized {uname}, pressing enter",
+                    (0, 1, 0, 1)
+                )
             pyautogui.moveTo(435, 1000, duration=0.2)
             pyautogui.click()
             os._exit(0)
 
-        # Rot
-        elif (r, g, b) == (255, 255, 255):
+
+        
+        elif r > 180 and g < 100 and b < 100:
             if log_callback:
-                log_callback(f"❌ Weiß erkannt bei {uname}, Tab schließen + (1080,800)...", (1, 0, 0, 1))
+                log_callback(f"red recognized {uname}, closing tab", (1, 0, 0, 1))
             pyautogui.hotkey("ctrl", "w")
             time.sleep(0.5)
             pyautogui.moveTo(1080, 800, duration=0.2)
@@ -182,10 +199,10 @@ def auto_claim_in_web(uname: str, log_callback=None) -> bool:
             time.sleep(1)
             return False
 
-        # Unklare Farbe
+        
         else:
             if log_callback:
-                log_callback(f"⚪️ Unklare Farbe ({r},{g},{b}) – Tab schließen & prüfen...", (1, 1, 0, 1))
+                log_callback(f"undefinable color{r},{g},{b}) – tab closed and testing", (1, 1, 0, 1))
             pyautogui.hotkey("ctrl", "w")
             time.sleep(0.2)
             pyautogui.moveTo(1080, 800, duration=0.2)
@@ -196,8 +213,9 @@ def auto_claim_in_web(uname: str, log_callback=None) -> bool:
 
     except Exception as e:
         if log_callback:
-            log_callback(f"Fehler in auto_claim_in_web: {e}", (1, 0, 0, 1))
+            log_callback(f"error in auto_claim_in_web: {e}", (1, 0, 0, 1))
         return False
+
 
 
 def check_username(username: str) -> bool:
@@ -214,7 +232,7 @@ def check_username(username: str) -> bool:
     return "unavailable" in body
 
 
-# ... dein KV-Code, SplashScreen, MainScreen, MainApp bleiben unverändert ...
+
 
 
 
@@ -250,7 +268,7 @@ ScreenManager:
             padding: dp(12)
             Label:
                 id: made_label
-                text: "Made by Virgin, @operatingsecure on telegram"
+                text: "Made by Virgin, @cpusocket on discord"
                 font_size: dp(16)
                 color: 1,1,1,0.6
                 opacity: 0
@@ -272,7 +290,7 @@ ScreenManager:
                     pos: self.pos
                     size: self.size
             Label:
-                text: "This Tool is not working 100%, be beware of this. 99% success rate."
+                text: "watermark by Virgin/2Sint"
                 color: 1,1,1,1
                 bold: True
                 halign: "left"
@@ -494,12 +512,12 @@ class MainScreen(Screen):
         super().__init__(**kwargs)
         self.usernames = []
         self.open_usernames = []
-        self.current_index = 0  # Fortschritt merken
+        self.current_index = 0  
         self._running_thread = None
 
     def continue_checking(self):
-        self.log("➡️ Continue gedrückt, mache mit nächstem Username weiter...", (0, 1, 1, 1))
-        # Button-Status setzen
+        self.log("continue pressed.", (0, 1, 1, 1))
+        
         Clock.schedule_once(lambda dt: self._set_start_btn_running(), 0)
         threading.Thread(target=self.run_checking, args=(self.current_index + 1,), daemon=True).start()
 
@@ -550,7 +568,7 @@ class MainScreen(Screen):
         total = len(self.usernames)
         for idx in range(start_index, total):
             uname = self.usernames[idx]
-            self.current_index = idx  # Fortschritt merken
+            self.current_index = idx  
             retries = 0
             is_open = False
             while retries < MAX_RETRIES:
@@ -565,36 +583,22 @@ class MainScreen(Screen):
             if is_open:
                 self.open_usernames.append(uname)
                 self.add_available(uname)
-                self.log(f"{uname} ist not used", (0, 1, 0, 1))
+                self.log(f"{uname} is not used", (0, 1, 0, 1))
 
-                try:
-                    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-                        for un in self.open_usernames:
-                            f.write(un + "\n")
-                    try:
-                        os.startfile(OUTPUT_FILE)
-                    except Exception:
-                        pass
-                except Exception as e:
-                    self.log(f"Mistake while saving {e}", (1, 0.5, 0.2, 1))
+                
 
-                self.log(f"Starte automatisches Claiming für {uname}...", (1, 1, 0.6, 1))
-                # Auto-claim in separatem Thread; er loggt selbst Erfolg/Misserfolg
+                self.log(f"starting automatic claiming {uname}...", (1, 1, 0.6, 1))
+                
                 threading.Thread(target=auto_claim_in_web, args=(uname, self.log), daemon=True).start()
-                return  # Abbruch nach erstem offenen Namen (warte auf manuellen Continue falls nötig)
+                return  
             else:
-                self.log(f"{uname} ist used", (1, 0, 0, 1))
+                self.log(f"{uname} is used", (1, 0, 0, 1))
 
             progress_val = (idx / total) * 100 if total > 0 else 100
             Clock.schedule_once(lambda dt, v=progress_val: self._set_progress(v))
             time.sleep(SLEEP_BETWEEN)
 
-        try:
-            with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-                for uname in self.open_usernames:
-                    f.write(uname + "\n")
-        except Exception as e:
-            self.log(f"Mistake while saving final {e}", (1, 0.5, 0.2, 1))
+        
 
         Clock.schedule_once(lambda dt: self._enable_start_btn())
 
@@ -603,7 +607,7 @@ class MainScreen(Screen):
 
     def _enable_start_btn(self):
         self.ids.start_btn.disabled = False
-        self.ids.start_btn.text = "Start Checking"
+        self.ids.start_btn.text = "start claiming"
 
 
 class MainApp(App):
